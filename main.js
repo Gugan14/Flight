@@ -61,11 +61,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Ground Collision & Physics Constants ---
     const raycaster = new THREE.Raycaster();
-    const gearHeight = 3.5;
+    // THE DEFINITIVE FIX: Define a radius for the wheels to prevent them from sinking.
+    const WHEEL_RADIUS = 0.6; 
     const gearPositions = [
-        new THREE.Vector3(0, -gearHeight, 15),
-        new THREE.Vector3(-5, -gearHeight, -5),
-        new THREE.Vector3(5, -gearHeight, -5),
+        new THREE.Vector3(0, 0, 15),
+        new THREE.Vector3(-5, 0, -5),
+        new THREE.Vector3(5, 0, -5),
     ];
     const PHYSICS_CONSTANTS = {
         thrustMultiplier: 0.015,
@@ -80,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loader = new THREE.GLTFLoader(loadingManager);
     loader.load('models/airplane.glb', (gltf) => {
         localPlayer.mesh.add(gltf.scene);
-        localPlayer.mesh.position.y = gearHeight + 2; // Spawn safely above the ground
+        localPlayer.mesh.position.y = WHEEL_RADIUS + 2; // Spawn safely above the ground
     });
 
     // --- Game State & HUD ---
@@ -137,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const throttleLevel = parseInt(throttleSlider.value) / 100;
         const targetAirspeed = MAX_SPEED_INTERNAL * throttleLevel;
         const airspeed = localPlayer.velocity.length();
-
         const thrustMagnitude = (targetAirspeed - airspeed) * PHYSICS_CONSTANTS.thrustMultiplier;
         let thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
         if (gameState.engine1Prc < 100 || gameState.engine2Prc < 100) {
@@ -156,10 +156,9 @@ document.addEventListener('DOMContentLoaded', () => {
             let stallEffect = 1.0;
             if (Math.abs(aoa) > PHYSICS_CONSTANTS.stallAngle) stallEffect = Math.max(0, 1 - (Math.abs(aoa) - PHYSICS_CONSTANTS.stallAngle) / 0.1);
             let liftMagnitude = airspeed * airspeed * (PHYSICS_CONSTANTS.liftCoefficient + Math.abs(aoa)) * stallEffect;
-            if (localPlayer.mesh.position.y < gearHeight + 10) liftMagnitude *= 1.2;
+            if (localPlayer.mesh.position.y < WHEEL_RADIUS + 10) liftMagnitude *= 1.2;
             const liftForce = planeUpVector.clone().multiplyScalar(liftMagnitude);
             totalForces.add(liftForce);
-
             const dragMagnitude = airspeed * airspeed * PHYSICS_CONSTANTS.dragCoefficient * (gameState.isGearDown ? 5 : 1);
             const dragForce = velocityDirection.clone().multiplyScalar(-dragMagnitude);
             totalForces.add(dragForce);
@@ -188,8 +187,9 @@ document.addEventListener('DOMContentLoaded', () => {
             let maxPenetration = 0;
             gearPositions.forEach(gearPos => {
                 const worldPos = localPlayer.mesh.localToWorld(gearPos.clone());
-                if (worldPos.y < 0) { // Check if any gear is below the runway level
-                    maxPenetration = Math.max(maxPenetration, -worldPos.y);
+                // The check is now against the WHEEL_RADIUS, not 0
+                if (worldPos.y < WHEEL_RADIUS) { 
+                    maxPenetration = Math.max(maxPenetration, WHEEL_RADIUS - worldPos.y);
                     gameState.onGround = true;
                 }
             });
@@ -206,6 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cameraOffset = new THREE.Vector3(cameraDistance * Math.sin(cameraAzimuth) * Math.cos(cameraElevation), cameraDistance * Math.sin(cameraElevation), cameraDistance * Math.cos(cameraAzimuth) * Math.cos(cameraElevation));
         camera.position.lerp(localPlayer.mesh.position.clone().add(cameraOffset), 0.1);
         camera.lookAt(localPlayer.mesh.position);
+        
         const altitude = localPlayer.mesh.position.y;
         document.getElementById('altitude-value').textContent = Math.max(0, Math.round(altitude * 3.28));
         document.getElementById('airspeed-value').textContent = Math.round(airspeed * 200);
