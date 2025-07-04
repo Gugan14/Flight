@@ -91,7 +91,7 @@ body {
 .top-left-hud { top: 20px; left: 20px; }
 .top-right-hud { top: 20px; right: 20px; align-items: flex-end; }
 .left-hud { top: 120px; left: 20px; display: flex; flex-direction: column; height: calc(100vh - 140px); justify-content: space-between; }
-.middle-right-hud { top: 50%; right: 40px; transform: translateY(-50%); }
+.middle-right-hud { top: 50%; right: 40px; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; }
 .bottom-hud { bottom: 20px; left: 50%; transform: translateX(-50%); }
 
 /* Components */
@@ -114,10 +114,11 @@ button.active { background-color: #3498db; border-color: #3498db; }
 .plane-icon { width: 20px; height: 20px; background-color: #f1c40f; clip-path: polygon(50% 0%, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0% 50%, 40% 40%); position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(180deg); }
 .left-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .left-buttons button { grid-column: span 1; }
-#engine-controls { display: flex; justify-content: space-around; align-items: center; background-color: rgba(30, 30, 30, 0.7); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 5px; padding: 5px; }
+.engine-display { display: flex; gap: 15px; background: rgba(20, 20, 20, 0.6); padding: 10px; border-radius: 8px; margin-bottom: 20px; }
+.engine-pod { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.engine-percent { font-size: 1em; font-weight: bold; color: #ccc; }
 .engine-btn { width: 35px; height: 35px; border: 2px solid #888; background-color: #444; border-radius: 50%; color: #ccc; display: flex; justify-content: center; align-items: center; font-weight: bold; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-.engine-btn.engine-on { background-color: #2ecc71; border-color: #27ae60; color: white; }
-.middle-right-hud { display: flex; flex-direction: column; align-items: center; gap: 20px; }
-.engine-status { width: 100px; }
+.engine-btn.engine-on { background-color: #f1c40f; border-color: #f39c12; color: white; }
+.engine-btn.engine-ready { background-color: #2ecc71; border-color: #27ae60; }
 .joystick { width: 150px; height: 150px; background-color: rgba(0, 0, 0, 0.3); border-radius: 50%; position: relative; }
 .joystick-nub { width: 60px; height: 60px; background-color: rgba(255, 255, 255, 0.4); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); cursor: grab; }
