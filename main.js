@@ -28,10 +28,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const dirLight = new THREE.DirectionalLight(0xffffff, 1);
     dirLight.position.set(10, 20, 15);
     scene.add(dirLight);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(20000, 20000), new THREE.MeshStandardMaterial({ color: 0xdeb887 }));
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
     scene.background = new THREE.Color(0x87ceeb);
+
+    // --- NEW: Procedural Runway ---
+    const runwayGroup = new THREE.Group();
+    const runwayMaterial = new THREE.MeshStandardMaterial({ color: 0x404040 });
+    const runwayGeometry = new THREE.PlaneGeometry(80, 3000);
+    const runwayMesh = new THREE.Mesh(runwayGeometry, runwayMaterial);
+    runwayMesh.rotation.x = -Math.PI / 2;
+    runwayGroup.add(runwayMesh);
+
+    const markingsMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const centerlineGeometry = new THREE.PlaneGeometry(1, 3000);
+    const centerlineMesh = new THREE.Mesh(centerlineGeometry, markingsMaterial);
+    centerlineMesh.rotation.x = -Math.PI / 2;
+    centerlineMesh.position.y = 0.01; // Slightly above tarmac to prevent z-fighting
+    runwayGroup.add(centerlineMesh);
+    scene.add(runwayGroup);
+
 
     // --- Player & Physics Model ---
     let localPlayer = { mesh: new THREE.Group(), velocity: new THREE.Vector3(), angularVelocity: new THREE.Vector3() };
@@ -41,15 +55,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Ground Collision & Physics Constants ---
     const raycaster = new THREE.Raycaster();
-    const gearHeight = 3.5; // The height of the landing gear suspension
+    const gearHeight = 3.5;
     const gearPositions = [
-        new THREE.Vector3(0, -gearHeight, 15),   // Nose gear
-        new THREE.Vector3(-5, -gearHeight, -5),  // Left main gear
-        new THREE.Vector3(5, -gearHeight, -5),   // Right main gear
+        new THREE.Vector3(0, 0, 15),   // Nose gear (Y is 0 because it's relative to plane center)
+        new THREE.Vector3(-5, 0, -5),  // Left main gear
+        new THREE.Vector3(5, 0, -5),   // Right main gear
     ];
     const PHYSICS_CONSTANTS = {
-        thrustForce: 0.25,
-        dragCoefficient: 0.0002,
+        thrustMultiplier: 0.015,
+        dragCoefficient: 0.0001,
         liftCoefficient: 0.07,
         angularDrag: 0.97,
         suspensionStiffness: 0.05,
@@ -107,101 +121,89 @@ document.addEventListener('DOMContentLoaded', () => {
     function animate() {
         requestAnimationFrame(animate);
         const deltaTime = clock.getDelta();
+        if (deltaTime > 0.1) return; // Prevent physics bugs on tab switch
 
-        // --- Engine & Throttle Logic ---
+        // Engine Spool Logic
         const spoolRate = 0.5;
         if (gameState.engine1On && gameState.engine1Prc < 100) gameState.engine1Prc += spoolRate; else if (!gameState.engine1On && gameState.engine1Prc > 0) gameState.engine1Prc -= spoolRate * 2;
         if (gameState.engine2On && gameState.engine2Prc < 100) gameState.engine2Prc += spoolRate; else if (!gameState.engine2On && gameState.engine2Prc > 0) gameState.engine2Prc -= spoolRate * 2;
         gameState.engine1Prc = Math.max(0, Math.min(100, gameState.engine1Prc));
         gameState.engine2Prc = Math.max(0, Math.min(100, gameState.engine2Prc));
-        targetThrust = (gameState.engine1Prc >= 100 && gameState.engine2Prc >= 100) ? parseInt(throttleSlider.value) / 100 : 0;
-        currentThrust += (targetThrust - currentThrust) * 0.05;
-
-        // --- Physics Calculation ---
-        const forwardVector = localPlayer.mesh.getWorldDirection(new THREE.Vector3());
-        const airspeed = localPlayer.velocity.length();
-        const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
-
-        // -- Forces --
-        const totalForces = new THREE.Vector3(0, -9.8, 0); // Start with Gravity
         
-        // Thrust (Momentum-based)
-        const thrustMagnitude = currentThrust * PHYSICS_CONSTANTS.thrustForce * (1 + airspeed * 0.1);
-        const thrustForce = forwardVector.clone().multiplyScalar(thrustMagnitude);
+        // Target-Speed Based Acceleration
+        const throttleLevel = parseInt(throttleSlider.value) / 100;
+        const targetAirspeed = MAX_SPEED_INTERNAL * throttleLevel;
+        const airspeed = localPlayer.velocity.length();
+
+        const thrustMagnitude = (targetAirspeed - airspeed) * PHYSICS_CONSTANTS.thrustMultiplier;
+        const thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
+        if (gameState.engine1Prc < 100 || gameState.engine2Prc < 100) {
+            thrustForce.multiplyScalar(0);
+        }
+        
+        // Physics Calculation
+        const forwardVector = localPlayer.mesh.getWorldDirection(new THREE.Vector3());
+        const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
+        const totalForces = new THREE.Vector3(0, -9.8, 0);
         totalForces.add(thrustForce);
 
         // Aerodynamic forces only apply if moving
-        if (airspeed > 0.1) {
-            // Lift
+        if (airspeed > 1.0) { // Increased threshold to prevent weird behavior at standstill
             const velocityDirection = localPlayer.velocity.clone().normalize();
             const dot = THREE.MathUtils.clamp(planeUpVector.dot(velocityDirection), -1, 1);
             let aoa = Math.acos(dot) - Math.PI / 2;
             let stallEffect = 1.0;
             if (Math.abs(aoa) > PHYSICS_CONSTANTS.stallAngle) stallEffect = Math.max(0, 1 - (Math.abs(aoa) - PHYSICS_CONSTANTS.stallAngle) / 0.1);
             let liftMagnitude = airspeed * airspeed * (PHYSICS_CONSTANTS.liftCoefficient + Math.abs(aoa)) * stallEffect;
-            if (localPlayer.mesh.position.y < gearHeight + 10) liftMagnitude *= 1.2;
             const liftForce = planeUpVector.clone().multiplyScalar(liftMagnitude);
             totalForces.add(liftForce);
 
-            // Drag
-            const dragMagnitude = airspeed * airspeed * PHYSICS_CONSTANTS.dragCoefficient * (gameState.isGearDown ? 3 : 1);
-            const dragForce = localPlayer.velocity.clone().multiplyScalar(-1).normalize().multiplyScalar(dragMagnitude);
+            const dragMagnitude = airspeed * airspeed * PHYSICS_CONSTANTS.dragCoefficient * (gameState.isGearDown ? 5 : 1);
+            const dragForce = velocityDirection.clone().multiplyScalar(-dragMagnitude);
             totalForces.add(dragForce);
-        }
-
-        // --- Ground Collision & Suspension ---
-        gameState.onGround = false;
-        if (gameState.isGearDown) {
-            gearPositions.forEach(gearPos => {
-                const worldPos = localPlayer.mesh.localToWorld(gearPos.clone());
-                raycaster.set(worldPos, new THREE.Vector3(0, -1, 0));
-                const intersects = raycaster.intersectObject(ground);
-
-                if (intersects.length > 0) {
-                    const hit = intersects[0];
-                    if (hit.distance < gearHeight) {
-                        gameState.onGround = true;
-                        // Suspension spring force
-                        const compression = gearHeight - hit.distance;
-                        const springForce = compression * PHYSICS_CONSTANTS.suspensionStiffness;
-                        
-                        // Suspension damping force
-                        const dampingForce = planeUpVector.dot(localPlayer.velocity) * PHYSICS_CONSTANTS.suspensionDamping;
-                        
-                        const totalSuspension = Math.max(0, springForce - dampingForce);
-                        totalForces.add(planeUpVector.clone().multiplyScalar(totalSuspension));
-                        
-                        // Ground friction
-                        const friction = localPlayer.velocity.clone();
-                        friction.y = 0;
-                        friction.multiplyScalar(-0.5); // 50% friction
-                        totalForces.add(friction);
-                    }
-                }
-            });
         }
 
         // Apply all forces to velocity
         localPlayer.velocity.add(totalForces.clone().multiplyScalar(deltaTime));
 
-        // Rotational Physics (Torque)
-        const aeroForce = airspeed; // Controls are more effective at higher speeds
+        // Rotational Physics
+        const aeroForce = airspeed;
         controls.yaw = keys['q'] ? 1.0 : (keys['e'] ? -1.0 : 0);
         const torque = new THREE.Vector3(controls.pitch * PHYSICS_CONSTANTS.sensitivity.pitch * aeroForce, controls.yaw * PHYSICS_CONSTANTS.sensitivity.yaw * aeroForce, controls.roll * PHYSICS_CONSTANTS.sensitivity.roll * aeroForce);
-        if (gameState.onGround) torque.multiplyScalar(0.2); // Less control on ground
+        if (gameState.onGround) torque.multiplyScalar(0.2);
         localPlayer.angularVelocity.add(torque.clone().multiplyScalar(deltaTime));
-        localPlayer.angularVelocity.multiplyScalar(1 - (PHYSICS_CONSTANTS.angularDrag * deltaTime));
+        const angularDrag = gameState.onGround ? 0.9 : PHYSICS_CONSTANTS.angularDrag;
+        localPlayer.angularVelocity.multiplyScalar(1 - ((1-angularDrag) * deltaTime * 60)); // Frame-rate independent drag
         const deltaRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(localPlayer.angularVelocity.x * deltaTime, localPlayer.angularVelocity.y * deltaTime, localPlayer.angularVelocity.z * deltaTime));
         localPlayer.mesh.quaternion.multiply(deltaRotation);
 
         // Update Position
         localPlayer.mesh.position.add(localPlayer.velocity.clone().multiplyScalar(deltaTime));
 
-        // Max Speed Cap
-        if (localPlayer.velocity.length() > MAX_SPEED_INTERNAL) {
-            localPlayer.velocity.normalize().multiplyScalar(MAX_SPEED_INTERNAL);
-        }
+        // Foolproof Ground Collision
+        gameState.onGround = false;
+        if (gameState.isGearDown) {
+            let maxCorrection = 0;
+            gearPositions.forEach(gearPos => {
+                const worldPos = localPlayer.mesh.localToWorld(gearPos.clone());
+                raycaster.set(worldPos, new THREE.Vector3(0, -1, 0));
+                const intersects = raycaster.intersectObject(runwayGroup, true);
 
+                if (intersects.length > 0) {
+                    const hit = intersects[0];
+                    if (hit.point.y < worldPos.y) {
+                        const correction = hit.point.y - worldPos.y;
+                        maxCorrection = Math.max(maxCorrection, -correction);
+                        gameState.onGround = true;
+                    }
+                }
+            });
+            if (maxCorrection > 0) {
+                localPlayer.mesh.position.y += maxCorrection;
+                localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
+            }
+        }
+        
         // --- Camera & HUD Update ---
         const cameraOffset = new THREE.Vector3(cameraDistance * Math.sin(cameraAzimuth) * Math.cos(cameraElevation), cameraDistance * Math.sin(cameraElevation), cameraDistance * Math.cos(cameraAzimuth) * Math.cos(cameraElevation));
         camera.position.lerp(localPlayer.mesh.position.clone().add(cameraOffset), 0.1);
