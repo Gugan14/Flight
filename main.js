@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     loader.setLoadingManager(loadingManager);
     loader.load('models/airplane.glb', (gltf) => {
-        gltf.scene.scale.set(0.5, 0.5, 0.5);
+        gltf.scene.scale.set(1, 1, 1);
         gltf.scene.rotation.y = Math.PI;
         localPlayer.mesh.add(gltf.scene);
         localPlayer.mesh.position.y = 1; // Start on the ground
