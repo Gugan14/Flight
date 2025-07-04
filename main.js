@@ -45,7 +45,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Player & Physics Model ---
     let localPlayer = { mesh: new THREE.Group(), velocity: new THREE.Vector3(), angularVelocity: new THREE.Vector3() };
     scene.add(localPlayer.mesh);
-    const GROUND_LEVEL = 3.5;
+    const INITIAL_Y_POSITION = 3.5;
+    const MAX_SPEED_KTS = 500;
+    const MAX_SPEED_INTERNAL = MAX_SPEED_KTS / 200;
+
+    // --- Ground Collision Setup ---
+    const raycaster = new THREE.Raycaster();
+    const gearPositions = [
+        new THREE.Vector3(0, -INITIAL_Y_POSITION + 0.1, 15),
+        new THREE.Vector3(-5, -INITIAL_Y_POSITION + 0.1, -5),
+        new THREE.Vector3(5, -INITIAL_Y_POSITION + 0.1, -5),
+    ];
 
     // --- Model Loading ---
     const loader = new THREE.GLTFLoader(loadingManager);
@@ -53,11 +63,12 @@ document.addEventListener('DOMContentLoaded', () => {
         gltf.scene.scale.set(1.0, 1.0, 1.0);
         gltf.scene.rotation.y = Math.PI;
         localPlayer.mesh.add(gltf.scene);
-        localPlayer.mesh.position.y = GROUND_LEVEL;
+        localPlayer.mesh.position.y = INITIAL_Y_POSITION;
     });
 
     // --- Game State & HUD ---
     let gameState = { isGearDown: true, engine1On: false, engine2On: false, engine1Prc: 0, engine2Prc: 0 };
+    let targetThrust = 0, currentThrust = 0;
     const throttleSlider = document.getElementById('throttle-slider');
     const gearButton = document.getElementById('btn-gears');
     const engine1Button = document.getElementById('btn-engine-1');
@@ -68,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Flight & Camera Controls ---
     const controls = { pitch: 0, roll: 0, yaw: 0 };
-    const physics = { drag: 0.98, angularDrag: 0.98, liftCoefficient: 0.08, sensitivity: { pitch: 0.001, roll: 0.0008, yaw: 0.0005 }, stallAngle: 0.3 };
+    const physics = { drag: 0.98, angularDrag: 0.98, liftCoefficient: 0.08, sensitivity: { pitch: 0.001, roll: 0.0008, yaw: 0.0005 }, stallAngle: 0.35 };
     let joystickActive = false, isDraggingCamera = false;
     let lastMousePos = { x: 0, y: 0 };
     let cameraAzimuth = Math.PI, cameraElevation = 0.2;
@@ -100,48 +111,48 @@ document.addEventListener('DOMContentLoaded', () => {
     function animate() {
         requestAnimationFrame(animate);
 
-        // --- Engine Spool-Up/Down Logic ---
+        // --- Engine & Throttle Logic ---
         const spoolRate = 0.5;
-        if (gameState.engine1On && gameState.engine1Prc < 100) gameState.engine1Prc += spoolRate;
-        else if (!gameState.engine1On && gameState.engine1Prc > 0) gameState.engine1Prc -= spoolRate * 2;
-        if (gameState.engine2On && gameState.engine2Prc < 100) gameState.engine2Prc += spoolRate;
-        else if (!gameState.engine2On && gameState.engine2Prc > 0) gameState.engine2Prc -= spoolRate * 2;
+        if (gameState.engine1On && gameState.engine1Prc < 100) gameState.engine1Prc += spoolRate; else if (!gameState.engine1On && gameState.engine1Prc > 0) gameState.engine1Prc -= spoolRate * 2;
+        if (gameState.engine2On && gameState.engine2Prc < 100) gameState.engine2Prc += spoolRate; else if (!gameState.engine2On && gameState.engine2Prc > 0) gameState.engine2Prc -= spoolRate * 2;
         gameState.engine1Prc = Math.max(0, Math.min(100, gameState.engine1Prc));
         gameState.engine2Prc = Math.max(0, Math.min(100, gameState.engine2Prc));
         
+        targetThrust = (gameState.engine1Prc >= 100 && gameState.engine2Prc >= 100) ? parseInt(throttleSlider.value) / 100 : 0;
+        currentThrust += (targetThrust - currentThrust) * 0.05;
+
         // --- Physics Calculation ---
-        const throttle = parseInt(throttleSlider.value) / 100;
-        const thrust = (gameState.engine1Prc >= 100 && gameState.engine2Prc >= 100) ? throttle * 0.15 : 0;
-        
+        const thrust = currentThrust * 0.2;
         const forwardVector = localPlayer.mesh.getWorldDirection(new THREE.Vector3());
         const airspeed = localPlayer.velocity.length();
         const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
+
+        // Realistic Lift
         const velocityDirection = airspeed > 0.01 ? localPlayer.velocity.clone().normalize() : forwardVector;
-        let aoa = Math.acos(planeUpVector.dot(velocityDirection)) - Math.PI / 2;
-        
+        const dot = THREE.MathUtils.clamp(planeUpVector.dot(velocityDirection), -1, 1);
+        let aoa = Math.acos(dot) - Math.PI / 2;
         let stallEffect = 1.0;
         if (Math.abs(aoa) > physics.stallAngle) stallEffect = Math.max(0.1, 1 - (Math.abs(aoa) - physics.stallAngle) / 0.1);
         let liftMagnitude = airspeed * airspeed * (physics.liftCoefficient + Math.abs(aoa) * 0.5) * stallEffect;
-        if (localPlayer.mesh.position.y < GROUND_LEVEL + 5) liftMagnitude *= 1.2;
+        if (localPlayer.mesh.position.y < INITIAL_Y_POSITION + 10) liftMagnitude *= 1.2;
         const liftForce = planeUpVector.multiplyScalar(liftMagnitude);
 
-        // Forces
+        // Apply Forces
         localPlayer.velocity.add(forwardVector.clone().multiplyScalar(thrust));
         localPlayer.velocity.add(liftForce);
         localPlayer.velocity.y -= 0.0098;
         const currentDrag = gameState.isGearDown ? physics.drag - 0.025 : physics.drag;
         localPlayer.velocity.multiplyScalar(currentDrag);
+        
+        // Max Speed Cap
+        if (localPlayer.velocity.length() > MAX_SPEED_INTERNAL) {
+            localPlayer.velocity.normalize().multiplyScalar(MAX_SPEED_INTERNAL);
+        }
+        
+        // Update Position
         localPlayer.mesh.position.add(localPlayer.velocity);
 
-        // Ground Collision
-        if (localPlayer.mesh.position.y < GROUND_LEVEL) {
-            localPlayer.mesh.position.y = GROUND_LEVEL;
-            localPlayer.velocity.y = 0;
-            localPlayer.velocity.multiplyScalar(0.95);
-            localPlayer.angularVelocity.multiplyScalar(0.8);
-        }
-
-        // Rotational Physics (Torque)
+        // --- Rotational Physics (Torque) ---
         const aeroForce = airspeed * 0.1;
         controls.yaw = keys['q'] ? 1.0 : (keys['e'] ? -1.0 : 0);
         const torque = new THREE.Vector3(controls.pitch * physics.sensitivity.pitch * aeroForce, controls.yaw * physics.sensitivity.yaw * aeroForce, controls.roll * physics.sensitivity.roll * aeroForce);
@@ -150,13 +161,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const deltaRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(localPlayer.angularVelocity.x, localPlayer.angularVelocity.y, localPlayer.angularVelocity.z));
         localPlayer.mesh.quaternion.multiply(deltaRotation);
 
+        // --- Raycasting Ground Collision ---
+        let maxCorrection = 0;
+        if (gameState.isGearDown) {
+            gearPositions.forEach(gearPos => {
+                const worldPos = localPlayer.mesh.localToWorld(gearPos.clone());
+                raycaster.set(worldPos, new THREE.Vector3(0, -1, 0));
+                const intersects = raycaster.intersectObject(ground);
+
+                if (intersects.length > 0) {
+                    const hit = intersects[0];
+                    const correction = worldPos.y - hit.point.y;
+                    if (correction < 0) {
+                        maxCorrection = Math.max(maxCorrection, -correction);
+                    }
+                }
+            });
+        }
+        if (maxCorrection > 0) {
+            localPlayer.mesh.position.y += maxCorrection;
+            localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
+            localPlayer.velocity.multiplyScalar(0.95);
+            localPlayer.angularVelocity.multiplyScalar(0.8);
+        }
+
         // --- Camera Update ---
         const cameraOffset = new THREE.Vector3(cameraDistance * Math.sin(cameraAzimuth) * Math.cos(cameraElevation), cameraDistance * Math.sin(cameraElevation), cameraDistance * Math.cos(cameraAzimuth) * Math.cos(cameraElevation));
         camera.position.lerp(localPlayer.mesh.position.clone().add(cameraOffset), 0.1);
         camera.lookAt(localPlayer.mesh.position);
 
         // --- HUD Update ---
-        document.getElementById('altitude-value').textContent = Math.max(0, Math.round((localPlayer.mesh.position.y - GROUND_LEVEL) * 3.28));
+        document.getElementById('altitude-value').textContent = Math.max(0, Math.round((localPlayer.mesh.position.y - INITIAL_Y_POSITION) * 3.28));
         document.getElementById('airspeed-value').textContent = Math.round(airspeed * 200);
         engine1Percent.textContent = `${Math.round(gameState.engine1Prc)}%`;
         engine2Percent.textContent = `${Math.round(gameState.engine2Prc)}%`;
@@ -167,8 +202,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderer.render(scene, camera);
     }
-    
-    // Note: animate() is now called inside loadingManager.onLoad.
     
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
