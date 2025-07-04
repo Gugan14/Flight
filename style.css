@@ -17,133 +17,50 @@ body {
     height: 100%;
 }
 
-.hud {
+/* --- Status, Loading & Error Screens --- */
+#loading-container {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: none;
-    box-sizing: border-box;
-}
-
-.hud > div {
-    position: absolute;
-}
-.hud button, .hud input {
-    pointer-events: all;
-}
-
-/* --- Positioning --- */
-.top-left-hud { top: 20px; left: 20px; }
-.top-right-hud { top: 20px; right: 20px; align-items: flex-end; }
-.left-hud { top: 120px; left: 20px; display: flex; flex-direction: column; height: calc(100vh - 140px); justify-content: space-between; }
-.middle-right-hud { top: 50%; right: 40px; transform: translateY(-50%); }
-.bottom-hud { bottom: 20px; left: 50%; transform: translateX(-50%); }
-
-/* --- General Components --- */
-.instrument {
-    background: rgba(20, 20, 20, 0.6);
-    padding: 5px 10px;
-    border-radius: 8px;
-    text-align: center;
-    backdrop-filter: blur(5px);
-}
-.instrument label { font-size: 0.7em; color: #bbb; }
-.instrument div { font-size: 1.2em; font-weight: bold; }
-button {
-    background-color: rgba(30, 30, 30, 0.7);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 5px;
-    padding: 8px 12px;
-    font-size: 0.8em;
-    cursor: pointer;
-}
-button.active {
-    background-color: #3498db;
-    border-color: #3498db;
-}
-
-/* --- Top Left --- */
-.top-left-hud .icon-buttons { display: flex; gap: 10px; }
-.top-left-hud .icon-buttons button { font-size: 1.2em; padding: 5px 10px; }
-.server-info { font-size: 0.8em; background-color: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; margin-top: 10px; }
-
-/* --- Top Right --- */
-.top-right-hud { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-.button-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 5px;
-    background: rgba(20, 20, 20, 0.6);
-    padding: 10px;
-    border-radius: 8px;
-}
-.button-grid.secondary-grid { grid-template-columns: repeat(3, 1fr); }
-
-/* --- Left Column --- */
-.airspeed-display { margin-bottom: 20px; }
-.throttle-container {
-    height: 200px;
-    background: rgba(20, 20, 20, 0.6);
-    padding: 15px 5px;
-    border-radius: 10px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-#throttle-slider {
-    -webkit-appearance: none;
-    width: 180px;
-    height: 15px;
-    transform: rotate(-90deg);
-}
-.bottom-left-controls { display: flex; flex-direction: column; gap: 10px; }
-.map-container {
-    width: 120px; height: 120px;
-    background-color: rgba(20, 20, 20, 0.8);
-    border: 1px solid #555;
-    border-radius: 8px;
-    position: relative;
-}
-.plane-icon {
-    width: 20px; height: 20px;
-    background-color: #f1c40f;
-    clip-path: polygon(50% 0%, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0% 50%, 40% 40%);
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%) rotate(180deg);
-}
-.left-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.left-buttons button { grid-column: span 1; }
-#btn-off { background-color: #c0392b; }
-
-/* --- Middle Right (Joystick) --- */
-.middle-right-hud { display: flex; flex-direction: column; align-items: center; gap: 20px; }
-.engine-status { width: 100px; }
-.joystick {
-    width: 150px; height: 150px;
-    background-color: rgba(0, 0, 0, 0.3);
-    border-radius: 50%;
-    position: relative;
-    pointer-events: all;
-}
-.joystick-nub {
-    width: 60px; height: 60px;
-    background-color: rgba(255, 255, 255, 0.4);
-    border-radius: 50%;
-    position: absolute;
-    top: 50%; left: 50%;
+    top: 50%;
+    left: 50%;
     transform: translate(-50%, -50%);
-    cursor: grab;
+    z-index: 100;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
-
-/* --- Status & Loading --- */
-#loading-screen {
-    position: absolute; width: 100%; height: 100%;
-    background-color: black; z-index: 100;
-    display: flex; justify-content: center; align-items: center;
+.loading-text {
+    font-size: 1.2em;
+    margin-bottom: 10px;
+}
+.progress-bar {
+    width: 250px;
+    height: 20px;
+    background-color: #555;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.progress-bar-inner {
+    width: 0%;
+    height: 100%;
+    background-color: #3498db;
+    transition: width 0.2s ease-out;
+}
+#error-screen {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 101;
+    background: #c0392b;
+    color: white;
+    padding: 25px;
+    border-radius: 8px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-align: center;
+    max-width: 80%;
 }
 #multiplayer-status {
     position: absolute;
@@ -156,3 +73,49 @@ button.active {
     pointer-events: all;
     font-size: 0.9em;
 }
+
+/* --- Main UI HUD --- */
+.hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.hud > div { position: absolute; }
+.hud button, .hud input { pointer-events: all; }
+
+/* Positioning */
+.top-left-hud { top: 20px; left: 20px; }
+.top-right-hud { top: 20px; right: 20px; align-items: flex-end; }
+.left-hud { top: 120px; left: 20px; display: flex; flex-direction: column; height: calc(100vh - 140px); justify-content: space-between; }
+.middle-right-hud { top: 50%; right: 40px; transform: translateY(-50%); }
+.bottom-hud { bottom: 20px; left: 50%; transform: translateX(-50%); }
+
+/* Components */
+.instrument { background: rgba(20, 20, 20, 0.6); padding: 5px 10px; border-radius: 8px; text-align: center; backdrop-filter: blur(5px); }
+.instrument label { font-size: 0.7em; color: #bbb; }
+.instrument div { font-size: 1.2em; font-weight: bold; }
+button { background-color: rgba(30, 30, 30, 0.7); color: white; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 5px; padding: 8px 12px; font-size: 0.8em; cursor: pointer; }
+button.active { background-color: #3498db; border-color: #3498db; }
+.top-left-hud .icon-buttons { display: flex; gap: 10px; }
+.top-left-hud .icon-buttons button { font-size: 1.2em; padding: 5px 10px; }
+.server-info { font-size: 0.8em; background-color: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; margin-top: 10px; }
+.top-right-hud { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.button-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; background: rgba(20, 20, 20, 0.6); padding: 10px; border-radius: 8px; }
+.button-grid.secondary-grid { grid-template-columns: repeat(3, 1fr); }
+.airspeed-display { margin-bottom: 20px; }
+.throttle-container { height: 200px; background: rgba(20, 20, 20, 0.6); padding: 15px 5px; border-radius: 10px; display: flex; justify-content: center; align-items: center; }
+#throttle-slider { -webkit-appearance: none; width: 180px; height: 15px; transform: rotate(-90deg); }
+.bottom-left-controls { display: flex; flex-direction: column; gap: 10px; }
+.map-container { width: 120px; height: 120px; background-color: rgba(20, 20, 20, 0.8); border: 1px solid #555; border-radius: 8px; position: relative; }
+.plane-icon { width: 20px; height: 20px; background-color: #f1c40f; clip-path: polygon(50% 0%, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0% 50%, 40% 40%); position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(180deg); }
+.left-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.left-buttons button { grid-column: span 1; }
+#btn-off { background-color: #c0392b; }
+.middle-right-hud { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.engine-status { width: 100px; }
+.joystick { width: 150px; height: 150px; background-color: rgba(0, 0, 0, 0.3); border-radius: 50%; position: relative; pointer-events: all; }
+.joystick-nub { width: 60px; height: 60px; background-color: rgba(255, 255, 255, 0.4); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); cursor: grab; }
