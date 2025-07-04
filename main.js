@@ -56,9 +56,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const MAX_SPEED_INTERNAL = MAX_SPEED_KTS / 200;
 
     // --- Ground Collision & Physics Constants ---
-    const raycaster = new THREE.Raycaster();
-    const wheelObjects = []; // This will store the actual wheel meshes
-    const WHEEL_RADIUS = 0.6; // Visual radius of the tire
+    // DEFINITIVE FIX: Use reliable attachment points, not wheel names.
+    const gearHeight = 3.5;
+    const gearPositions = [
+        new THREE.Vector3(0, 0, 15),   // Nose gear (relative to plane center)
+        new THREE.Vector3(-5, 0, -5),  // Left main gear
+        new THREE.Vector3(5, 0, -5),   // Right main gear
+    ];
     const PHYSICS_CONSTANTS = {
         thrustMultiplier: 0.015,
         dragCoefficient: 0.0001,
@@ -72,15 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loader = new THREE.GLTFLoader(loadingManager);
     loader.load('models/airplane.glb', (gltf) => {
         localPlayer.mesh.add(gltf.scene);
-        localPlayer.mesh.position.y = WHEEL_RADIUS + 2; // Spawn safely above the ground
-        
-        // DEFINITIVE FIX: Find and store the actual wheel objects from the model
-        gltf.scene.traverse(node => {
-            if (node.isMesh && node.name.toLowerCase().includes('wheel')) {
-                wheelObjects.push(node);
-                console.log('Found wheel:', node.name);
-            }
-        });
+        localPlayer.mesh.position.y = gearHeight + 2; // Spawn safely above the ground
     });
 
     // --- Game State & HUD ---
@@ -101,6 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const cameraDistance = 25;
 
     // --- Input Listeners (Complete) ---
+    const joystickContainer = document.getElementById('joystick-container');
+    const joystickNub = document.getElementById('joystick-nub');
     document.addEventListener('keydown', (e) => (keys[e.key.toLowerCase()] = true));
     document.addEventListener('keyup', (e) => (keys[e.key.toLowerCase()] = false));
     function handleJoystick(event) { event.preventDefault(); const rect = joystickContainer.getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; let x = (touch.clientX - rect.left - rect.width / 2) / (rect.width / 2); let y = (touch.clientY - rect.top - rect.height / 2) / (rect.height / 2); const mag = Math.sqrt(x * x + y * y); if (mag > 1) { x /= mag; y /= mag; } joystickNub.style.left = `${50 + x * 50}%`; joystickNub.style.top = `${50 + y * 50}%`; controls.roll = x; controls.pitch = -y; }
@@ -146,8 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Physics Calculation ---
         const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
         const totalForces = new THREE.Vector3(0, -9.8, 0);
-        totalForces.add(thrustForce);
-
+        
         if (airspeed > 0.5) {
             const velocityDirection = localPlayer.velocity.clone().normalize();
             const dot = THREE.MathUtils.clamp(planeUpVector.dot(velocityDirection), -1, 1);
@@ -155,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let stallEffect = 1.0;
             if (Math.abs(aoa) > PHYSICS_CONSTANTS.stallAngle) stallEffect = Math.max(0, 1 - (Math.abs(aoa) - PHYSICS_CONSTANTS.stallAngle) / 0.1);
             let liftMagnitude = airspeed * airspeed * (PHYSICS_CONSTANTS.liftCoefficient + Math.abs(aoa)) * stallEffect;
-            if (localPlayer.mesh.position.y < WHEEL_RADIUS + 10) liftMagnitude *= 1.2;
+            if (localPlayer.mesh.position.y < gearHeight + 10) liftMagnitude *= 1.2;
             const liftForce = planeUpVector.clone().multiplyScalar(liftMagnitude);
             totalForces.add(liftForce);
             const dragMagnitude = airspeed * airspeed * PHYSICS_CONSTANTS.dragCoefficient * (gameState.isGearDown ? 5 : 1);
@@ -163,6 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
             totalForces.add(dragForce);
         }
 
+        totalForces.add(thrustForce);
         localPlayer.velocity.add(totalForces.clone().multiplyScalar(deltaTime));
 
         // Rotational Physics
@@ -179,25 +177,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update Position
         localPlayer.mesh.position.add(localPlayer.velocity.clone().multiplyScalar(deltaTime));
 
-        // --- DEFINITIVE GROUND COLLISION (Using Actual Wheels) ---
+        // --- THE DEFINITIVE "HARD FLOOR" GROUND COLLISION ---
         gameState.onGround = false;
-        if (gameState.isGearDown && wheelObjects.length > 0) {
+        if (gameState.isGearDown) {
             let maxPenetration = 0;
-            const worldPos = new THREE.Vector3();
-
-            wheelObjects.forEach(wheel => {
-                wheel.getWorldPosition(worldPos);
-                // The check is now against the visual wheel's radius
-                if (worldPos.y < WHEEL_RADIUS) { 
-                    maxPenetration = Math.max(maxPenetration, WHEEL_RADIUS - worldPos.y);
+            gearPositions.forEach(gearPos => {
+                const worldPos = localPlayer.mesh.localToWorld(gearPos.clone());
+                if (worldPos.y < gearHeight) { 
+                    maxPenetration = Math.max(maxPenetration, gearHeight - worldPos.y);
                     gameState.onGround = true;
                 }
             });
 
             if (maxPenetration > 0) {
-                // Instantly correct the plane's position straight up
                 localPlayer.mesh.position.y += maxPenetration;
-                // Instantly cancel all downward velocity to stop sinking/bouncing
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
             }
         }
