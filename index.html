@@ -20,7 +20,6 @@
 
     <!-- Main Game UI -->
     <div class="hud">
-        <!-- TOP ROW -->
         <div class="top-left-hud">
             <div class="icon-buttons">
                 <button>☰</button>
@@ -49,8 +48,6 @@
                 <button id="btn-camera">CAMERA</button>
             </div>
         </div>
-
-        <!-- MIDDLE ROW -->
         <div class="middle-right-hud">
             <div class="engine-status">
                 <label>ENGINES</label>
@@ -60,8 +57,6 @@
                 <div id="joystick-nub" class="joystick-nub"></div>
             </div>
         </div>
-
-        <!-- LEFT COLUMN -->
         <div class="left-hud">
             <div class="instrument airspeed-display">
                 <label>AIRSPEED</label>
@@ -80,11 +75,12 @@
                     <button id="btn-pushback-btm">PUSHBACK</button>
                     <button id="btn-lnd-brake">LND BRAKE</button>
                 </div>
-                <button id="btn-off">OFF</button>
+                <div class="engine-controls">
+                    <button id="btn-engine-1">1</button>
+                    <button id="btn-engine-2">2</button>
+                </div>
             </div>
         </div>
-
-        <!-- BOTTOM ROW -->
         <div class="bottom-hud">
             <div class="instrument heading-display">
                 <label>HEADING</label>
