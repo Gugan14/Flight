@@ -1,12 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- UI Elements ---
+    // --- UI Elements & Loading Manager ---
     const loadingContainer = document.getElementById('loading-container');
     const progressBar = document.getElementById('progress-bar-inner');
     const errorScreen = document.getElementById('error-screen');
-    const joystickContainer = document.getElementById('joystick-container');
-    const joystickNub = document.getElementById('joystick-nub');
-
-    // --- Loading Manager ---
     const loadingManager = new THREE.LoadingManager();
     loadingManager.onLoad = () => { loadingContainer.style.display = 'none'; animate(); };
     loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => { progressBar.style.width = `${(itemsLoaded / itemsTotal) * 100}%`; };
@@ -61,13 +57,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Ground Collision & Physics Constants ---
     const raycaster = new THREE.Raycaster();
-    // THE DEFINITIVE FIX: Define a radius for the wheels to prevent them from sinking.
-    const WHEEL_RADIUS = 0.6; 
-    const gearPositions = [
-        new THREE.Vector3(0, 0, 15),
-        new THREE.Vector3(-5, 0, -5),
-        new THREE.Vector3(5, 0, -5),
-    ];
+    const wheelObjects = []; // This will store the actual wheel meshes
+    const WHEEL_RADIUS = 0.6; // Visual radius of the tire
     const PHYSICS_CONSTANTS = {
         thrustMultiplier: 0.015,
         dragCoefficient: 0.0001,
@@ -82,6 +73,14 @@ document.addEventListener('DOMContentLoaded', () => {
     loader.load('models/airplane.glb', (gltf) => {
         localPlayer.mesh.add(gltf.scene);
         localPlayer.mesh.position.y = WHEEL_RADIUS + 2; // Spawn safely above the ground
+        
+        // DEFINITIVE FIX: Find and store the actual wheel objects from the model
+        gltf.scene.traverse(node => {
+            if (node.isMesh && node.name.toLowerCase().includes('wheel')) {
+                wheelObjects.push(node);
+                console.log('Found wheel:', node.name);
+            }
+        });
     });
 
     // --- Game State & HUD ---
@@ -147,8 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Physics Calculation ---
         const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
         const totalForces = new THREE.Vector3(0, -9.8, 0);
-        
-        // Aerodynamic Forces (Only apply if moving)
+        totalForces.add(thrustForce);
+
         if (airspeed > 0.5) {
             const velocityDirection = localPlayer.velocity.clone().normalize();
             const dot = THREE.MathUtils.clamp(planeUpVector.dot(velocityDirection), -1, 1);
@@ -164,7 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
             totalForces.add(dragForce);
         }
 
-        totalForces.add(thrustForce);
         localPlayer.velocity.add(totalForces.clone().multiplyScalar(deltaTime));
 
         // Rotational Physics
@@ -181,13 +179,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update Position
         localPlayer.mesh.position.add(localPlayer.velocity.clone().multiplyScalar(deltaTime));
 
-        // --- THE DEFINITIVE "HARD FLOOR" GROUND COLLISION ---
+        // --- DEFINITIVE GROUND COLLISION (Using Actual Wheels) ---
         gameState.onGround = false;
-        if (gameState.isGearDown) {
+        if (gameState.isGearDown && wheelObjects.length > 0) {
             let maxPenetration = 0;
-            gearPositions.forEach(gearPos => {
-                const worldPos = localPlayer.mesh.localToWorld(gearPos.clone());
-                // The check is now against the WHEEL_RADIUS, not 0
+            const worldPos = new THREE.Vector3();
+
+            wheelObjects.forEach(wheel => {
+                wheel.getWorldPosition(worldPos);
+                // The check is now against the visual wheel's radius
                 if (worldPos.y < WHEEL_RADIUS) { 
                     maxPenetration = Math.max(maxPenetration, WHEEL_RADIUS - worldPos.y);
                     gameState.onGround = true;
@@ -206,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const cameraOffset = new THREE.Vector3(cameraDistance * Math.sin(cameraAzimuth) * Math.cos(cameraElevation), cameraDistance * Math.sin(cameraElevation), cameraDistance * Math.cos(cameraAzimuth) * Math.cos(cameraElevation));
         camera.position.lerp(localPlayer.mesh.position.clone().add(cameraOffset), 0.1);
         camera.lookAt(localPlayer.mesh.position);
-        
         const altitude = localPlayer.mesh.position.y;
         document.getElementById('altitude-value').textContent = Math.max(0, Math.round(altitude * 3.28));
         document.getElementById('airspeed-value').textContent = Math.round(airspeed * 200);
