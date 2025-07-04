@@ -121,32 +121,33 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- THE GLITCH KILLER: Physics Stability ---
         if (deltaTime > 0.1) return;
 
-        // Engine Spool Logic
+        // --- Engine Spool Logic ---
         const spoolRate = 0.5;
         if (gameState.engine1On && gameState.engine1Prc < 100) gameState.engine1Prc += spoolRate; else if (!gameState.engine1On && gameState.engine1Prc > 0) gameState.engine1Prc -= spoolRate * 2;
         if (gameState.engine2On && gameState.engine2Prc < 100) gameState.engine2Prc += spoolRate; else if (!gameState.engine2On && gameState.engine2Prc > 0) gameState.engine2Prc -= spoolRate * 2;
         gameState.engine1Prc = Math.max(0, Math.min(100, gameState.engine1Prc));
         gameState.engine2Prc = Math.max(0, Math.min(100, gameState.engine2Prc));
         
-        // Target-Speed Based Acceleration
+        // --- Target-Speed Based Acceleration ---
         const throttleLevel = parseInt(throttleSlider.value) / 100;
         const targetAirspeed = MAX_SPEED_INTERNAL * throttleLevel;
         const airspeed = localPlayer.velocity.length();
 
         const thrustMagnitude = (targetAirspeed - airspeed) * PHYSICS_CONSTANTS.thrustMultiplier;
-        const thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
+        let thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
         if (gameState.engine1Prc < 100 || gameState.engine2Prc < 100) {
             thrustForce.multiplyScalar(0);
         }
         
-        // Physics Calculation
+        // --- Physics Calculation ---
         const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
-        const totalForces = new THREE.Vector3(0, -9.8, 0);
-        totalForces.add(thrustForce);
-
-        // Aerodynamic forces only apply if moving above a minimum speed
-        if (airspeed > 1.0) {
+        const totalForces = new THREE.Vector3(0, -9.8, 0); // Start with Gravity
+        
+        // --- Aerodynamic Forces (Only apply if moving) ---
+        if (airspeed > 0.5) {
             const velocityDirection = localPlayer.velocity.clone().normalize();
+            
+            // Lift
             const dot = THREE.MathUtils.clamp(planeUpVector.dot(velocityDirection), -1, 1);
             let aoa = Math.acos(dot) - Math.PI / 2;
             let stallEffect = 1.0;
@@ -156,51 +157,53 @@ document.addEventListener('DOMContentLoaded', () => {
             const liftForce = planeUpVector.clone().multiplyScalar(liftMagnitude);
             totalForces.add(liftForce);
 
+            // Drag
             const dragMagnitude = airspeed * airspeed * PHYSICS_CONSTANTS.dragCoefficient * (gameState.isGearDown ? 5 : 1);
             const dragForce = velocityDirection.clone().multiplyScalar(-dragMagnitude);
             totalForces.add(dragForce);
         }
 
+        // Always apply thrust
+        totalForces.add(thrustForce);
+
         // Apply all forces to velocity
         localPlayer.velocity.add(totalForces.clone().multiplyScalar(deltaTime));
 
-        // Rotational Physics
+        // --- Rotational Physics ---
         const aeroForce = airspeed;
         controls.yaw = keys['q'] ? 1.0 : (keys['e'] ? -1.0 : 0);
         const torque = new THREE.Vector3(controls.pitch * PHYSICS_CONSTANTS.sensitivity.pitch * aeroForce, controls.yaw * PHYSICS_CONSTANTS.sensitivity.yaw * aeroForce, controls.roll * PHYSICS_CONSTANTS.sensitivity.roll * aeroForce);
-        if (gameState.onGround) torque.multiplyScalar(0.2); // Less control authority on the ground
+        if (gameState.onGround) torque.multiplyScalar(0.2);
         localPlayer.angularVelocity.add(torque.clone().multiplyScalar(deltaTime));
         const angularDrag = gameState.onGround ? 0.9 : PHYSICS_CONSTANTS.angularDrag;
-        localPlayer.angularVelocity.multiplyScalar(1 - ((1-angularDrag) * deltaTime * 60));
+        localPlayer.angularVelocity.multiplyScalar(1 - ((1 - angularDrag) * deltaTime * 60));
         const deltaRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(localPlayer.angularVelocity.x * deltaTime, localPlayer.angularVelocity.y * deltaTime, localPlayer.angularVelocity.z * deltaTime));
         localPlayer.mesh.quaternion.multiply(deltaRotation);
 
         // Update Position
         localPlayer.mesh.position.add(localPlayer.velocity.clone().multiplyScalar(deltaTime));
 
-        // DEFINITIVE GROUND COLLISION
+        // --- DEFINITIVE GROUND COLLISION ---
         gameState.onGround = false;
         if (gameState.isGearDown) {
-            let maxCorrection = 0;
+            let maxPenetration = 0;
             gearPositions.forEach(gearPos => {
                 const worldPos = localPlayer.mesh.localToWorld(gearPos.clone());
-                raycaster.set(worldPos.add(new THREE.Vector3(0, gearHeight, 0)), new THREE.Vector3(0, -1, 0));
-                const intersects = raycaster.intersectObject(runwayMesh, false); // Intersect only with runway
+                raycaster.set(worldPos, new THREE.Vector3(0, -1, 0));
+                const intersects = raycaster.intersectObject(runwayMesh, false);
 
                 if (intersects.length > 0) {
                     const hit = intersects[0];
-                    if (hit.distance < gearHeight) {
-                        maxCorrection = Math.max(maxCorrection, gearHeight - hit.distance);
+                    const penetration = hit.distance;
+                    if (penetration < gearHeight) {
+                        maxPenetration = Math.max(maxPenetration, gearHeight - penetration);
                         gameState.onGround = true;
                     }
                 }
             });
-            if (maxCorrection > 0) {
-                localPlayer.mesh.position.y += maxCorrection;
-                localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y); // Stop falling
-                localPlayer.velocity.x *= 0.99; // Ground friction
-                localPlayer.velocity.z *= 0.99;
-                localPlayer.angularVelocity.multiplyScalar(0.9); // Dampen rotation
+            if (maxPenetration > 0) {
+                localPlayer.mesh.position.y += maxPenetration;
+                localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
             }
         }
         
