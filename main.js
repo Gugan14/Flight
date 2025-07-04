@@ -56,13 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const MAX_SPEED_INTERNAL = MAX_SPEED_KTS / 200;
 
     // --- Ground Collision & Physics Constants ---
-    // DEFINITIVE FIX: Use reliable attachment points, not wheel names.
-    const gearHeight = 3.5;
-    const gearPositions = [
-        new THREE.Vector3(0, 0, 15),   // Nose gear (relative to plane center)
-        new THREE.Vector3(-5, 0, -5),  // Left main gear
-        new THREE.Vector3(5, 0, -5),   // Right main gear
-    ];
+    const boundingBox = new THREE.Box3();
     const PHYSICS_CONSTANTS = {
         thrustMultiplier: 0.015,
         dragCoefficient: 0.0001,
@@ -76,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loader = new THREE.GLTFLoader(loadingManager);
     loader.load('models/airplane.glb', (gltf) => {
         localPlayer.mesh.add(gltf.scene);
-        localPlayer.mesh.position.y = gearHeight + 2; // Spawn safely above the ground
+        localPlayer.mesh.position.y = 5; // Spawn safely above the ground
     });
 
     // --- Game State & HUD ---
@@ -124,14 +118,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const deltaTime = clock.getDelta();
         if (deltaTime > 0.1) return;
 
-        // --- Engine Spool Logic ---
+        // Engine Spool Logic
         const spoolRate = 0.5;
         if (gameState.engine1On && gameState.engine1Prc < 100) gameState.engine1Prc += spoolRate; else if (!gameState.engine1On && gameState.engine1Prc > 0) gameState.engine1Prc -= spoolRate * 2;
         if (gameState.engine2On && gameState.engine2Prc < 100) gameState.engine2Prc += spoolRate; else if (!gameState.engine2On && gameState.engine2Prc > 0) gameState.engine2Prc -= spoolRate * 2;
         gameState.engine1Prc = Math.max(0, Math.min(100, gameState.engine1Prc));
         gameState.engine2Prc = Math.max(0, Math.min(100, gameState.engine2Prc));
         
-        // --- Target-Speed Based Acceleration ---
+        // Target-Speed Based Acceleration
         const throttleLevel = parseInt(throttleSlider.value) / 100;
         const targetAirspeed = MAX_SPEED_INTERNAL * throttleLevel;
         const airspeed = localPlayer.velocity.length();
@@ -141,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
             thrustForce.multiplyScalar(0);
         }
         
-        // --- Physics Calculation ---
+        // Physics Calculation
         const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
         const totalForces = new THREE.Vector3(0, -9.8, 0);
         
@@ -152,7 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let stallEffect = 1.0;
             if (Math.abs(aoa) > PHYSICS_CONSTANTS.stallAngle) stallEffect = Math.max(0, 1 - (Math.abs(aoa) - PHYSICS_CONSTANTS.stallAngle) / 0.1);
             let liftMagnitude = airspeed * airspeed * (PHYSICS_CONSTANTS.liftCoefficient + Math.abs(aoa)) * stallEffect;
-            if (localPlayer.mesh.position.y < gearHeight + 10) liftMagnitude *= 1.2;
             const liftForce = planeUpVector.clone().multiplyScalar(liftMagnitude);
             totalForces.add(liftForce);
             const dragMagnitude = airspeed * airspeed * PHYSICS_CONSTANTS.dragCoefficient * (gameState.isGearDown ? 5 : 1);
@@ -177,20 +170,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update Position
         localPlayer.mesh.position.add(localPlayer.velocity.clone().multiplyScalar(deltaTime));
 
-        // --- THE DEFINITIVE "HARD FLOOR" GROUND COLLISION ---
+        // --- THE DEFINITIVE "HARD FLOOR" GROUND COLLISION (Using Bounding Box) ---
         gameState.onGround = false;
-        if (gameState.isGearDown) {
-            let maxPenetration = 0;
-            gearPositions.forEach(gearPos => {
-                const worldPos = localPlayer.mesh.localToWorld(gearPos.clone());
-                if (worldPos.y < gearHeight) { 
-                    maxPenetration = Math.max(maxPenetration, gearHeight - worldPos.y);
-                    gameState.onGround = true;
-                }
-            });
+        if (gameState.isGearDown && localPlayer.mesh.children.length > 0) {
+            // Update the bounding box to the plane's current world position and orientation
+            boundingBox.setFromObject(localPlayer.mesh, true);
+            const lowestPointY = boundingBox.min.y;
 
-            if (maxPenetration > 0) {
-                localPlayer.mesh.position.y += maxPenetration;
+            if (lowestPointY < 0) {
+                gameState.onGround = true;
+                // Calculate how much the plane has sunk below the runway
+                const penetration = -lowestPointY;
+                
+                // Instantly correct the plane's position straight up
+                localPlayer.mesh.position.y += penetration;
+                
+                // Instantly cancel all downward velocity to stop sinking/bouncing
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
             }
         }
@@ -199,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cameraOffset = new THREE.Vector3(cameraDistance * Math.sin(cameraAzimuth) * Math.cos(cameraElevation), cameraDistance * Math.sin(cameraElevation), cameraDistance * Math.cos(cameraAzimuth) * Math.cos(cameraElevation));
         camera.position.lerp(localPlayer.mesh.position.clone().add(cameraOffset), 0.1);
         camera.lookAt(localPlayer.mesh.position);
+        
         const altitude = localPlayer.mesh.position.y;
         document.getElementById('altitude-value').textContent = Math.max(0, Math.round(altitude * 3.28));
         document.getElementById('airspeed-value').textContent = Math.round(airspeed * 200);
