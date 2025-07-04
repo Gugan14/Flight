@@ -9,20 +9,49 @@
 <body>
     <canvas id="bg"></canvas>
 
-    <!-- Loading/Error Screens (No Change) -->
-    <div id="loading-container"><!-- ... --></div>
-    <div id="error-screen" style="display: none;"><!-- ... --></div>
+    <!-- Visual Loading Progress Bar and Error Display -->
+    <div id="loading-container">
+        <div class="loading-text">Loading Simulator...</div>
+        <div class="progress-bar">
+            <div id="progress-bar-inner" class="progress-bar-inner"></div>
+        </div>
+    </div>
+    <div id="error-screen" style="display: none;"></div>
 
     <!-- Main Game UI -->
     <div class="hud">
-        <!-- Top Left / Top Right / Bottom (No Changes) -->
-        <div class="top-left-hud"><!-- ... --></div>
-        <div class="top-right-hud"><!-- ... --></div>
-        <div class="bottom-hud"><!-- ... --></div>
+        <!-- TOP ROW -->
+        <div class="top-left-hud">
+            <div class="icon-buttons">
+                <button>☰</button>
+                <button>💬</button>
+            </div>
+            <div class="server-info">Server ID: 6tchPJDC</div>
+        </div>
+        <div class="top-right-hud">
+            <div class="instrument altitude-display">
+                <label>ALTITUDE</label>
+                <div id="altitude-value">0</div>
+                <label>FT (ASL)</label>
+            </div>
+            <div class="button-grid">
+                <button id="btn-cfg-brk">CFG/BRK</button>
+                <button id="btn-gears">GEARS</button>
+                <button id="btn-spoilers-top">SPOILERS</button>
+                <button id="btn-flaps">FLAPS</button>
+                <button id="btn-autopilot">AUTOPILOT</button>
+                <button id="btn-lights">LIGHTS</button>
+                <button id="btn-exit">EXIT</button>
+            </div>
+             <div class="button-grid secondary-grid">
+                <button id="btn-cockpit">COCKPIT</button>
+                <button id="btn-pushback-top">PUSHBACK</button>
+                <button id="btn-camera">CAMERA</button>
+            </div>
+        </div>
 
-        <!-- MIDDLE ROW (UPDATED) -->
+        <!-- MIDDLE ROW -->
         <div class="middle-right-hud">
-            <!-- NEW ENGINE DISPLAY -->
             <div class="engine-display">
                 <div class="engine-pod">
                     <div id="btn-engine-1" class="engine-btn">1</div>
@@ -33,31 +62,44 @@
                     <div id="engine-2-percent" class="engine-percent">0%</div>
                 </div>
             </div>
-            <!-- Joystick (No Change) -->
             <div id="joystick-container" class="joystick">
                 <div id="joystick-nub" class="joystick-nub"></div>
             </div>
         </div>
 
-        <!-- LEFT COLUMN (UPDATED) -->
+        <!-- LEFT COLUMN -->
         <div class="left-hud">
-            <!-- Airspeed / Throttle (No Change) -->
-            <div class="instrument airspeed-display"><!-- ... --></div>
-            <div class="throttle-container"><!-- ... --></div>
-            
+            <div class="instrument airspeed-display">
+                <label>AIRSPEED</label>
+                <div id="airspeed-value">0</div>
+                <label>KTS</label>
+            </div>
+            <div class="throttle-container">
+                <input type="range" min="0" max="100" value="0" class="slider" id="throttle-slider" orient="vertical">
+            </div>
             <div class="bottom-left-controls">
-                <!-- Map / Left Buttons (No Change) -->
-                <div class="map-container"><!-- ... --></div>
-                <div class="left-buttons"><!-- ... --></div>
-                
-                <!-- OLD ENGINE CONTROLS ARE REMOVED FROM HERE -->
+                <div class="map-container">
+                    <div class="plane-icon"></div>
+                </div>
+                <div class="left-buttons">
+                    <button id="btn-spoilers-btm">SPOILERS</button>
+                    <button id="btn-pushback-btm">PUSHBACK</button>
+                    <button id="btn-lnd-brake">LND BRAKE</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM ROW -->
+        <div class="bottom-hud">
+            <div class="instrument heading-display">
+                <label>HEADING</label>
+                <div id="heading-value">0°</div>
             </div>
         </div>
     </div>
     
     <div id="multiplayer-status"></div>
 
-    <!-- Scripts (No Change) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
