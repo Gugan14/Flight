@@ -58,8 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Ground Collision & Physics Constants ---
     const WHEEL_RADIUS = 0.6;
     const PHYSICS_CONSTANTS = {
-        // THE ONLY FIX: Increased thrust multiplier to a value that creates meaningful force.
-        thrustMultiplier: 0.2,
+        // THE FIX: New thrust model constants
+        maxThrust: 0.35, // The maximum force the engines can produce at full throttle
+        groundFriction: 0.98, // The friction applied when on the ground
+        
         dragCoefficient: 0.0001,
         liftCoefficient: 0.07,
         angularDrag: 0.97,
@@ -127,11 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.engine1Prc = Math.max(0, Math.min(100, gameState.engine1Prc));
         gameState.engine2Prc = Math.max(0, Math.min(100, gameState.engine2Prc));
         
-        // --- Target-Speed Based Acceleration ---
+        // --- Proportional Thrust Model ---
         const throttleLevel = parseInt(throttleSlider.value) / 100;
-        const targetAirspeed = MAX_SPEED_INTERNAL * throttleLevel;
-        const airspeed = localPlayer.velocity.length();
-        let thrustMagnitude = (targetAirspeed - airspeed) * PHYSICS_CONSTANTS.thrustMultiplier;
+        let thrustMagnitude = throttleLevel * PHYSICS_CONSTANTS.maxThrust;
         if (gameState.engine1Prc < 100 || gameState.engine2Prc < 100) {
             thrustMagnitude = 0;
         }
@@ -142,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalForces = new THREE.Vector3(0, -9.8, 0);
         totalForces.add(thrustForce);
 
+        const airspeed = localPlayer.velocity.length();
         if (airspeed > 0.5) {
             const velocityDirection = localPlayer.velocity.clone().normalize();
             const dot = THREE.MathUtils.clamp(planeUpVector.dot(velocityDirection), -1, 1);
@@ -152,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (localPlayer.mesh.position.y < WHEEL_RADIUS + 10) liftMagnitude *= 1.2;
             const liftForce = planeUpVector.clone().multiplyScalar(liftMagnitude);
             totalForces.add(liftForce);
+
             const dragMagnitude = airspeed * airspeed * PHYSICS_CONSTANTS.dragCoefficient * (gameState.isGearDown ? 5 : 1);
             const dragForce = velocityDirection.clone().multiplyScalar(-dragMagnitude);
             totalForces.add(dragForce);
@@ -185,12 +187,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 localPlayer.mesh.position.y += penetration;
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
 
-                // Apply ground friction only if there's no significant thrust command
-                if (throttleLevel < 0.01) {
-                    const groundFriction = 0.9;
-                    localPlayer.velocity.x *= groundFriction;
-                    localPlayer.velocity.z *= groundFriction;
-                }
+                // Apply ground friction when on the ground
+                const groundFriction = 1 - ((1 - PHYSICS_CONSTANTS.groundFriction) * deltaTime * 60);
+                localPlayer.velocity.x *= groundFriction;
+                localPlayer.velocity.z *= groundFriction;
             }
         }
         
