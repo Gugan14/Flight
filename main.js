@@ -58,8 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Ground Collision & Physics Constants ---
     const WHEEL_RADIUS = 0.6;
     const PHYSICS_CONSTANTS = {
-        // THE FIX: Increased thrust multiplier to overcome inertia and drag.
-        thrustMultiplier: 0.1, 
+        // THE FIX: Increased thrust multiplier to a value that creates meaningful force.
+        thrustMultiplier: 0.2,
         dragCoefficient: 0.0001,
         liftCoefficient: 0.07,
         angularDrag: 0.97,
@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function animate() {
         requestAnimationFrame(animate);
         const deltaTime = clock.getDelta();
-        if (deltaTime > 0.1) return;
+        if (deltaTime > 0.1 || deltaTime <= 0) return;
 
         // --- Engine Spool Logic ---
         const spoolRate = 0.5;
@@ -185,8 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 localPlayer.mesh.position.y += penetration;
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
 
-                // Apply ground friction only if there's no thrust
-                if (thrustMagnitude <= 0) {
+                // Apply ground friction only if there's effectively no thrust command
+                if (throttleLevel < 0.01) {
                     const groundFriction = 0.9;
                     localPlayer.velocity.x *= groundFriction;
                     localPlayer.velocity.z *= groundFriction;
