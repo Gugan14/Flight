@@ -58,10 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Ground Collision & Physics Constants ---
     const WHEEL_RADIUS = 0.6;
     const PHYSICS_CONSTANTS = {
-        // THE FIX: New thrust model constants
-        maxThrust: 0.8, // The absolute maximum force the engines can produce
-        
-        dragCoefficient: 0.0002, // Increased drag to counter the more powerful engines
+        // THE FIX: Powerful thrust and re-tuned drag for realistic acceleration
+        maxThrust: 1.0, 
+        dragCoefficient: 0.0002, 
+
         liftCoefficient: 0.07,
         angularDrag: 0.97,
         stallAngle: 0.4,
@@ -130,8 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // --- Proportional & Exponential Thrust Model ---
         const throttleLevel = parseInt(throttleSlider.value) / 100;
-        // The thrust is now an exponential curve of the throttle level.
-        // A low throttle gives very little power, a high throttle gives immense power.
+        // THE FIX: Thrust is now an exponential curve based on throttle level
         const thrustMagnitude = Math.pow(throttleLevel, 2) * PHYSICS_CONSTANTS.maxThrust;
         let thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
         if (gameState.engine1Prc < 100 || gameState.engine2Prc < 100) {
@@ -188,10 +187,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 localPlayer.mesh.position.y += penetration;
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
 
-                // Apply ground friction to simulate rolling resistance and stop unwanted movement
-                const groundFriction = 0.98;
-                localPlayer.velocity.x *= groundFriction;
-                localPlayer.velocity.z *= groundFriction;
+                // Apply ground friction to stop sliding when idle
+                if (thrustMagnitude < 0.01) {
+                    const groundFriction = 0.9;
+                    localPlayer.velocity.x *= groundFriction;
+                    localPlayer.velocity.z *= groundFriction;
+                }
             }
         }
         
