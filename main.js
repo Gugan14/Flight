@@ -59,10 +59,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const WHEEL_RADIUS = 0.6;
     const PHYSICS_CONSTANTS = {
         // THE FIX: New thrust model constants
-        maxThrust: 0.35, // The maximum force the engines can produce at full throttle
-        groundFriction: 0.98, // The friction applied when on the ground
+        maxThrust: 0.8, // The absolute maximum force the engines can produce
         
-        dragCoefficient: 0.0001,
+        dragCoefficient: 0.0002, // Increased drag to counter the more powerful engines
         liftCoefficient: 0.07,
         angularDrag: 0.97,
         stallAngle: 0.4,
@@ -129,13 +128,15 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.engine1Prc = Math.max(0, Math.min(100, gameState.engine1Prc));
         gameState.engine2Prc = Math.max(0, Math.min(100, gameState.engine2Prc));
         
-        // --- Proportional Thrust Model ---
+        // --- Proportional & Exponential Thrust Model ---
         const throttleLevel = parseInt(throttleSlider.value) / 100;
-        let thrustMagnitude = throttleLevel * PHYSICS_CONSTANTS.maxThrust;
+        // The thrust is now an exponential curve of the throttle level.
+        // A low throttle gives very little power, a high throttle gives immense power.
+        const thrustMagnitude = Math.pow(throttleLevel, 2) * PHYSICS_CONSTANTS.maxThrust;
+        let thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
         if (gameState.engine1Prc < 100 || gameState.engine2Prc < 100) {
-            thrustMagnitude = 0;
+            thrustForce.set(0, 0, 0);
         }
-        const thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
         
         // --- Physics Calculation ---
         const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
@@ -187,8 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 localPlayer.mesh.position.y += penetration;
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
 
-                // Apply ground friction when on the ground
-                const groundFriction = 1 - ((1 - PHYSICS_CONSTANTS.groundFriction) * deltaTime * 60);
+                // Apply ground friction to simulate rolling resistance and stop unwanted movement
+                const groundFriction = 0.98;
                 localPlayer.velocity.x *= groundFriction;
                 localPlayer.velocity.z *= groundFriction;
             }
