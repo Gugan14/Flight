@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Ground Collision & Physics Constants ---
     const WHEEL_RADIUS = 0.6;
     const PHYSICS_CONSTANTS = {
-        // THE FIX: Increased thrust multiplier to a value that creates meaningful force.
+        // THE ONLY FIX: Increased thrust multiplier to a value that creates meaningful force.
         thrustMultiplier: 0.2,
         dragCoefficient: 0.0001,
         liftCoefficient: 0.07,
@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 localPlayer.mesh.position.y += penetration;
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
 
-                // Apply ground friction only if there's effectively no thrust command
+                // Apply ground friction only if there's no significant thrust command
                 if (throttleLevel < 0.01) {
                     const groundFriction = 0.9;
                     localPlayer.velocity.x *= groundFriction;
