@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const MAX_SPEED_INTERNAL = MAX_SPEED_KTS / 200;
 
     // --- Ground Collision & Physics Constants ---
-    const boundingBox = new THREE.Box3();
+    const WHEEL_RADIUS = 0.6;
     const PHYSICS_CONSTANTS = {
         thrustMultiplier: 0.015,
         dragCoefficient: 0.0001,
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loader = new THREE.GLTFLoader(loadingManager);
     loader.load('models/airplane.glb', (gltf) => {
         localPlayer.mesh.add(gltf.scene);
-        localPlayer.mesh.position.y = 5; // Spawn safely above the ground
+        localPlayer.mesh.position.y = WHEEL_RADIUS + 2;
     });
 
     // --- Game State & HUD ---
@@ -113,19 +113,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- GAME LOOP ---
     const clock = new THREE.Clock();
+    const boundingBox = new THREE.Box3();
     function animate() {
         requestAnimationFrame(animate);
         const deltaTime = clock.getDelta();
         if (deltaTime > 0.1) return;
 
-        // Engine Spool Logic
+        // --- Engine Spool Logic ---
         const spoolRate = 0.5;
         if (gameState.engine1On && gameState.engine1Prc < 100) gameState.engine1Prc += spoolRate; else if (!gameState.engine1On && gameState.engine1Prc > 0) gameState.engine1Prc -= spoolRate * 2;
         if (gameState.engine2On && gameState.engine2Prc < 100) gameState.engine2Prc += spoolRate; else if (!gameState.engine2On && gameState.engine2Prc > 0) gameState.engine2Prc -= spoolRate * 2;
         gameState.engine1Prc = Math.max(0, Math.min(100, gameState.engine1Prc));
         gameState.engine2Prc = Math.max(0, Math.min(100, gameState.engine2Prc));
         
-        // Target-Speed Based Acceleration
+        // --- Target-Speed Based Acceleration ---
         const throttleLevel = parseInt(throttleSlider.value) / 100;
         const targetAirspeed = MAX_SPEED_INTERNAL * throttleLevel;
         const airspeed = localPlayer.velocity.length();
@@ -135,10 +136,11 @@ document.addEventListener('DOMContentLoaded', () => {
             thrustForce.multiplyScalar(0);
         }
         
-        // Physics Calculation
+        // --- Physics Calculation ---
         const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
         const totalForces = new THREE.Vector3(0, -9.8, 0);
-        
+        totalForces.add(thrustForce);
+
         if (airspeed > 0.5) {
             const velocityDirection = localPlayer.velocity.clone().normalize();
             const dot = THREE.MathUtils.clamp(planeUpVector.dot(velocityDirection), -1, 1);
@@ -146,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let stallEffect = 1.0;
             if (Math.abs(aoa) > PHYSICS_CONSTANTS.stallAngle) stallEffect = Math.max(0, 1 - (Math.abs(aoa) - PHYSICS_CONSTANTS.stallAngle) / 0.1);
             let liftMagnitude = airspeed * airspeed * (PHYSICS_CONSTANTS.liftCoefficient + Math.abs(aoa)) * stallEffect;
+            if (localPlayer.mesh.position.y < WHEEL_RADIUS + 10) liftMagnitude *= 1.2;
             const liftForce = planeUpVector.clone().multiplyScalar(liftMagnitude);
             totalForces.add(liftForce);
             const dragMagnitude = airspeed * airspeed * PHYSICS_CONSTANTS.dragCoefficient * (gameState.isGearDown ? 5 : 1);
@@ -153,7 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
             totalForces.add(dragForce);
         }
 
-        totalForces.add(thrustForce);
         localPlayer.velocity.add(totalForces.clone().multiplyScalar(deltaTime));
 
         // Rotational Physics
@@ -162,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const torque = new THREE.Vector3(controls.pitch * PHYSICS_CONSTANTS.sensitivity.pitch * aeroForce, controls.yaw * PHYSICS_CONSTANTS.sensitivity.yaw * aeroForce, controls.roll * PHYSICS_CONSTANTS.sensitivity.roll * aeroForce);
         if (gameState.onGround) torque.multiplyScalar(0.2);
         localPlayer.angularVelocity.add(torque.clone().multiplyScalar(deltaTime));
-        const angularDrag = gameState.onGround ? 0.9 : PHYSICS_CONSTANTS.angularDrag;
+        const angularDrag = gameState.onGround ? 0.95 : PHYSICS_CONSTANTS.angularDrag;
         localPlayer.angularVelocity.multiplyScalar(1 - ((1 - angularDrag) * deltaTime * 60));
         const deltaRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(localPlayer.angularVelocity.x * deltaTime, localPlayer.angularVelocity.y * deltaTime, localPlayer.angularVelocity.z * deltaTime));
         localPlayer.mesh.quaternion.multiply(deltaRotation);
@@ -170,23 +172,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update Position
         localPlayer.mesh.position.add(localPlayer.velocity.clone().multiplyScalar(deltaTime));
 
-        // --- THE DEFINITIVE "HARD FLOOR" GROUND COLLISION (Using Bounding Box) ---
+        // --- THE DEFINITIVE "HARD FLOOR" GROUND COLLISION ---
         gameState.onGround = false;
         if (gameState.isGearDown && localPlayer.mesh.children.length > 0) {
-            // Update the bounding box to the plane's current world position and orientation
             boundingBox.setFromObject(localPlayer.mesh, true);
             const lowestPointY = boundingBox.min.y;
 
             if (lowestPointY < 0) {
                 gameState.onGround = true;
-                // Calculate how much the plane has sunk below the runway
                 const penetration = -lowestPointY;
                 
-                // Instantly correct the plane's position straight up
                 localPlayer.mesh.position.y += penetration;
-                
-                // Instantly cancel all downward velocity to stop sinking/bouncing
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
+
+                // THE FIX: Apply strong friction when on the ground to stop sliding
+                const groundFriction = 0.9;
+                localPlayer.velocity.x *= groundFriction;
+                localPlayer.velocity.z *= groundFriction;
             }
         }
         
