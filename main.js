@@ -58,7 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Ground Collision & Physics Constants ---
     const WHEEL_RADIUS = 0.6;
     const PHYSICS_CONSTANTS = {
-        thrustMultiplier: 0.015,
+        // THE FIX: Increased thrust multiplier to overcome inertia and drag.
+        thrustMultiplier: 0.1, 
         dragCoefficient: 0.0001,
         liftCoefficient: 0.07,
         angularDrag: 0.97,
@@ -130,11 +131,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const throttleLevel = parseInt(throttleSlider.value) / 100;
         const targetAirspeed = MAX_SPEED_INTERNAL * throttleLevel;
         const airspeed = localPlayer.velocity.length();
-        const thrustMagnitude = (targetAirspeed - airspeed) * PHYSICS_CONSTANTS.thrustMultiplier;
-        let thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
+        let thrustMagnitude = (targetAirspeed - airspeed) * PHYSICS_CONSTANTS.thrustMultiplier;
         if (gameState.engine1Prc < 100 || gameState.engine2Prc < 100) {
-            thrustForce.multiplyScalar(0);
+            thrustMagnitude = 0;
         }
+        const thrustForce = localPlayer.mesh.getWorldDirection(new THREE.Vector3()).multiplyScalar(thrustMagnitude);
         
         // --- Physics Calculation ---
         const planeUpVector = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.mesh.quaternion);
@@ -172,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update Position
         localPlayer.mesh.position.add(localPlayer.velocity.clone().multiplyScalar(deltaTime));
 
-        // --- THE DEFINITIVE "HARD FLOOR" GROUND COLLISION ---
+        // --- "Hard Floor" Ground Collision ---
         gameState.onGround = false;
         if (gameState.isGearDown && localPlayer.mesh.children.length > 0) {
             boundingBox.setFromObject(localPlayer.mesh, true);
@@ -181,13 +182,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (lowestPointY < 0) {
                 gameState.onGround = true;
                 const penetration = -lowestPointY;
-                
                 localPlayer.mesh.position.y += penetration;
                 localPlayer.velocity.y = Math.max(0, localPlayer.velocity.y);
 
-                // THE FIX: Only apply ground friction if there is no thrust
-                const throttleLevelRaw = parseInt(throttleSlider.value);
-                if (throttleLevelRaw === 0) {
+                // Apply ground friction only if there's no thrust
+                if (thrustMagnitude <= 0) {
                     const groundFriction = 0.9;
                     localPlayer.velocity.x *= groundFriction;
                     localPlayer.velocity.z *= groundFriction;
@@ -196,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // --- Camera & HUD Update ---
-        const cameraOffset = new THREE.Vector3(cameraDistance * Math.sin(cameraAzimuth) * cameraDistance * Math.cos(cameraElevation), cameraDistance * Math.sin(cameraElevation), cameraDistance * Math.cos(cameraAzimuth) * cameraDistance * Math.cos(cameraElevation));
+        const cameraOffset = new THREE.Vector3(cameraDistance * Math.sin(cameraAzimuth) * Math.cos(cameraElevation), cameraDistance * Math.sin(cameraElevation), cameraDistance * Math.cos(cameraAzimuth) * Math.cos(cameraElevation));
         camera.position.lerp(localPlayer.mesh.position.clone().add(cameraOffset), 0.1);
         camera.lookAt(localPlayer.mesh.position);
         
